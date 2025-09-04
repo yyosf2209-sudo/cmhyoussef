@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Email Header Cleaner (Final v12)</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      padding: 30px;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      border-radius: 15px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+      padding: 25px;
+    }
+    h2 { text-align: center; color: #6f42c1; margin-bottom: 20px; }
+    label { font-weight: 600; color: #495057; }
+    textarea {
+      width: 100%; height: 200px; margin-top: 8px; padding: 12px;
+      border: 2px solid #6f42c1; border-radius: 10px;
+      font-size: 13px; background: #fdfdfd; resize: vertical;
+      white-space: pre-wrap; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+      font-family: monospace;
+    }
+    .buttons { margin-top: 18px; text-align: center; }
+    .btn {
+      padding: 12px 24px; margin: 8px; border: none; border-radius: 25px;
+      font-size: 14px; cursor: pointer; color: #fff;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .import-btn { background: #6f42c1; }
+    .clean-btn  { background: #28a745; }
+    .export-btn { background: #fd7e14; }
+    .clear-btn  { background: #17a2b8; }
+    .deselect-btn { background: #dc3545; }
+    .apply-btn { background: #007bff; }
+    .head-btn { background: #20c997; }
+    .insert-btn { background: #ff5722; }
+    .headers-box {
+      margin: 20px 0; padding: 15px; border-radius: 10px;
+      background: #f8f9fa; border: 1px solid #dee2e6; max-height: 200px; overflow-y: auto;
+    }
+    .headers-box label { display: inline-block; margin-right: 15px; margin-bottom: 8px; }
+    .options { margin: 20px 0; }
+    .options textarea {
+      width: 90%; height: 120px; padding: 10px;
+      border: 2px solid #6f42c1; border-radius: 10px; resize: vertical;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>✨ NEWSLITTER CLEANER ✨</h2>
+  <h10> by YOUSSEF DERRAZ[CMH8] </h10>
+
+  <label for="input">Paste NEWSLITTER:</label>
+  <textarea id="input" placeholder="Paste header here..."></textarea>
+
+  <input id="fileInput" type="file" accept=".txt,.eml,text/*" style="display:none" />
+
+  <div class="buttons">
+    <button class="btn import-btn" id="importBtn">📥 Import</button>
+    <button class="btn clean-btn" id="cleanBtn">🧹 Clean</button>
+    <button class="btn export-btn" id="exportBtn">💾 Export</button>
+    <button class="btn clear-btn" id="clearBtn">❌ Clear</button>
+    <button class="btn deselect-btn" id="deselectBtn">🔽 Deselect All</button>
+  </div>
+
+  <h3>Choose PARAMS to remove:</h3>
+  <div id="headersBox" class="headers-box">
+    <p style="color:#666">👉 Paste or Import a header to see available fields...</p>
+  </div>
+
+  <div class="options">
+    <label>Custom From Name:</label>
+    <input type="text" id="customName" placeholder="e.g. My Value">
+    <select id="actionSelect">
+      <option value="rdns">Replace domain with [RDNS]</option>
+      <option value="rpath">Replace domain with [P_RPATH]</option>
+      <option value="eid">Add [eid] in Message-ID</option>
+      <option value="ip">Add [ip] before DOCTYPE/HTML/IMG</option>
+    </select>
+    <button class="btn apply-btn" id="applyBtn">⚡ Apply</button>
+    <button class="btn head-btn" id="headBtn">➕ Add &lt;head&gt;&lt;select&gt;</button>
+  </div>
+
+  <div class="options">
+    <label> Insert HTML :</label><br>
+    <textarea id="insertText" placeholder="Enter text to insert above &lt;head&gt;"></textarea><br>
+    <button class="btn insert-btn" id="insertBtn">📌 Insert Text</button>
+  </div>
+
+  <h3>Cleaned STR:</h3>
+  <textarea id="output" placeholder="Result will appear here..."></textarea>
+</div>
+
+<script>
+const fileInput  = document.getElementById('fileInput');
+const importBtn  = document.getElementById('importBtn');
+const cleanBtn   = document.getElementById('cleanBtn');
+const exportBtn  = document.getElementById('exportBtn');
+const clearBtn   = document.getElementById('clearBtn');
+const deselectBtn= document.getElementById('deselectBtn');
+const applyBtn   = document.getElementById('applyBtn');
+const headBtn    = document.getElementById('headBtn');
+const insertBtn  = document.getElementById('insertBtn');
+const inputArea  = document.getElementById('input');
+const outputArea = document.getElementById('output');
+const headersBox = document.getElementById('headersBox');
+const customNameInput = document.getElementById('customName');
+const actionSelect = document.getElementById('actionSelect');
+const insertTextInput = document.getElementById('insertText');
+
+const alwaysChecked = [
+  "ARC-Authentication-Results",
+  "ARC-Message-Signature",
+  "ARC-Seal",
+  "Authentication-Results",
+  "DKIM-Signature",
+  "Delivered-To",
+  "Received-SPF",
+  "Return-Path",
+  "X-Google-Smtp-Source",
+  "X-Received"
+];
+
+importBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async (evt) => {
+  const file = evt.target.files[0];
+  if (!file) return;
+  inputArea.value = await file.text();
+  fileInput.value = '';
+  buildHeaderCheckboxes();
+});
+inputArea.addEventListener('input', buildHeaderCheckboxes);
+
+function buildHeaderCheckboxes() {
+  const text = inputArea.value;
+  if (!text.trim()) {
+    headersBox.innerHTML = "<p style='color:#666'>👉 Paste or Import a header to see available fields...</p>";
+    return;
+  }
+  const matches = [...text.matchAll(/^([\w\-]+):/gmi)].map(m => m[1]);
+  const unique = [...new Set(matches)].sort();
+  if (!unique.length) {
+    headersBox.innerHTML = "<p style='color:#666'>No headers found.</p>";
+    return;
+  }
+
+  headersBox.innerHTML = "";
+  unique.forEach(h => {
+    const id = "chk_" + h.replace(/[^a-z0-9]/gi, "_");
+    const checked = "checked";
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox" id="${id}" data-header="${h}" ${checked}> ${h}`;
+    headersBox.appendChild(label);
+  });
+}
+
+function removeHeaderBlock(text, header) {
+  const re = new RegExp("(^" + header + ".*(?:\\r?\\n[ \\t].*)*)", "gmi");
+  return text.replace(re, "");
+}
+
+function cleanHeader() {
+  let text = inputArea.value;
+  if (!text.trim()) { alert("Paste or import a header first."); return; }
+  const checks = headersBox.querySelectorAll("input[type=checkbox]:checked");
+  checks.forEach(chk => { const h = chk.dataset.header; text = removeHeaderBlock(text,h); });
+  text = text.replace(/^Received: by[^\n]*(?:\r?\n.*)?/gmi, "");
+  text = text.replace(/^X-Received: by[^\n]*(?:\r?\n.*)?/gmi, "");
+  text = text.replace(/^\s*[\r\n]/gm, "");
+  outputArea.value = text.trim();
+}
+cleanBtn.addEventListener('click', cleanHeader);
+
+exportBtn.addEventListener('click', () => {
+  const text = outputArea.value;
+  if (!text.trim()) { alert("Nothing to export."); return; }
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "cleaned_header.txt";
+  link.click();
+});
+
+clearBtn.addEventListener('click', () => {
+  inputArea.value = "";
+  outputArea.value = "";
+  headersBox.innerHTML = "<p style='color:#666'>👉 Paste or Import a header to see available fields...</p>";
+});
+
+deselectBtn.addEventListener('click', () => {
+  const checks = headersBox.querySelectorAll("input[type=checkbox]");
+  checks.forEach(chk => chk.checked = false);
+});
+
+// Apply transformations
+applyBtn.addEventListener('click', () => {
+  let text = outputArea.value || inputArea.value;
+  if (!text.trim()) { alert("Paste, import, or clean a header first."); return; }
+
+  const custom = customNameInput.value.trim();
+  const choice = actionSelect.value;
+
+  if (choice === "rdns" || choice === "rpath") {
+    const replaceWith = choice === "rdns" ? "[RDNS]" : "[P_RPATH]";
+    text = text.replace(/^From:\s*(?:(.*?)\s*)?<([^@<\s]+)@([^\s>]+)>/gmi, (m, disp, user, domain) => {
+      const newDisp = custom || disp || "";
+      return `From: ${newDisp ? newDisp + " " : ""}<${user}@${replaceWith}>`;
+    });
+  }
+
+  if (choice === "eid") {
+    text = text.replace(/^Message-ID:\s*<([^@>]+)@([^>]+)>/gmi, "Message-ID: <$1[eid]@$2>");
+  }
+
+  if (choice === "ip") {
+    if (!text.includes("[ip]")) {
+      text = text.replace(/(<!DOCTYPE|<html|<img)/i, "[ip]\n$1");
+    }
+  }
+
+  outputArea.value = text.trim();
+});
+
+// Add <head><select>
+headBtn.addEventListener('click', () => {
+  let text = outputArea.value || inputArea.value;
+  if (!text.trim()) { alert("Paste, import, or clean a header first."); return; }
+  text = text.replace(/\[ip\]/i, "[ip]\n<head><select>");
+  outputArea.value = text.trim();
+});
+
+// Insert custom text above <head><select>
+insertBtn.addEventListener('click', () => {
+  let text = outputArea.value || inputArea.value;
+  if (!text.trim()) { 
+    alert("Paste, import, or clean a header first."); 
+    return; 
+  }
+
+  const customText = insertTextInput.value;
+  if (!customText.trim()) { 
+    alert("Write something first."); 
+    return; 
+  }
+
+  // نضيف النص بين [ip] و <head><select> بلا ما نبدل التنسيق
+  text = text.replace(/(\[ip\])([\s\S]*?)(<head><select>)/i, `$1\n${customText}\n$3`);
+  
+  outputArea.value = text;
+});
+</script>
+
+</body>
+</html>
